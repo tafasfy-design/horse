@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>灵韵·几何马 | Equine Geometry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;700&family=Cinzel:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Noto Serif SC', serif;
+            background-color: #0a0a0c;
+            color: #e5e5e5;
+            overflow: hidden; /* Prevent scrolling */
+            touch-action: none; /* Disable default touch actions (zooming, panning) */
+            -webkit-user-select: none; /* Disable text selection */
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .ui-layer {
+            position: relative;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .interactive-btn {
+            pointer-events: auto;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            backdrop-filter: blur(8px);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .interactive-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 215, 0, 0.1);
+            border-color: rgba(255, 215, 0, 0.3);
+        }
+        
+        .interactive-btn:active {
+            transform: scale(0.96);
+        }
+
+        .color-btn {
+            pointer-events: auto;
+            transition: transform 0.2s;
+            position: relative;
+        }
+        .color-btn::after {
+            content: '';
+            position: absolute;
+            top: -5px; bottom: -5px; left: -5px; right: -5px; /* Increase tap area */
+        }
+        .color-btn:active {
+            transform: scale(0.9);
+        }
+        .color-btn.active {
+            transform: scale(1.2);
+            box-shadow: 0 0 10px currentColor;
+            z-index: 2;
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 768px) {
+            h1 { font-size: 1.5rem; }
+            .desc-text { font-size: 0.6rem; }
+        }
+
+        .title-font {
+            font-family: 'Cinzel', serif;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between">
+
+    <!-- Canvas Layer -->
+    <canvas id="mainCanvas"></canvas>
+
+    <!-- UI: Header -->
+    <div class="ui-layer w-full p-6 flex justify-between items-start bg-gradient-to-b from-black/40 to-transparent pointer-events-none">
+        <div>
+            <h1 class="text-3xl md:text-4xl font-bold tracking-widest title-font text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-yellow-500">EQUINE</h1>
+            <p class="text-xs md:text-sm text-gray-400 tracking-[0.3em] mt-1 desc-text">灵韵 · 几何 · 重构</p>
+        </div>
+        <div class="hidden md:block text-right">
+            <p class="text-xs text-gray-500 font-mono">2026 HORSE YEAR PROJECT</p>
+            <p class="text-xs text-gray-600 font-mono">GENERATIVE ART SYSTEM</p>
+        </div>
+    </div>
+
+    <!-- UI: Instructions & State -->
+    <div id="instruction-text" class="ui-layer absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none transition-opacity duration-500 w-full px-4">
+        <p class="text-xl md:text-2xl text-gray-300 font-light tracking-widest mb-2 whitespace-nowrap">绘制你的想象</p>
+        <p class="text-xs text-gray-500">在屏幕上随意涂抹，赋予它色彩与形态</p>
+    </div>
+
+    <!-- UI: Controls -->
+    <div class="ui-layer w-full p-4 md:p-6 flex flex-col items-center gap-4 mb-2 bg-gradient-to-t from-black/60 to-transparent">
+        
+        <!-- Color Picker -->
+        <div id="color-controls" class="flex gap-6 mb-2 transition-all duration-500">
+            <button class="color-btn w-8 h-8 md:w-10 md:h-10 rounded-full bg-red-500 border border-white/20" onclick="setColor('#ef4444', this)"></button>
+            <button class="color-btn w-8 h-8 md:w-10 md:h-10 rounded-full bg-amber-400 border border-white/20 active" onclick="setColor('#fbbf24', this)"></button>
+            <button class="color-btn w-8 h-8 md:w-10 md:h-10 rounded-full bg-emerald-500 border border-white/20" onclick="setColor('#10b981', this)"></button>
+            <button class="color-btn w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-500 border border-white/20" onclick="setColor('#3b82f6', this)"></button>
+            <button class="color-btn w-8 h-8 md:w-10 md:h-10 rounded-full bg-white border border-white/20" onclick="setColor('#ffffff', this)"></button>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-4">
+            <button id="resetBtn" class="interactive-btn px-6 py-3 rounded-full text-xs md:text-sm tracking-widest uppercase text-gray-300 min-w-[100px]">
+                重置
+            </button>
+            <button id="transformBtn" class="interactive-btn px-8 py-3 rounded-full text-xs md:text-sm tracking-widest uppercase font-bold text-amber-100 border-amber-500/30 bg-amber-900/20 min-w-[140px]">
+                注入灵韵
+            </button>
+            <button id="saveBtn" class="hidden interactive-btn px-6 py-3 rounded-full text-xs md:text-sm tracking-widest uppercase text-gray-300">
+                生成海报
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * CONFIGURATION & STATE
+         */
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        
+        // State machine
+        let currentState = 'drawing'; 
+        
+        // Drawing data
+        let strokes = []; 
+        let currentStroke = [];
+        let isDrawing = false;
+        let brushColor = '#fbbf24';
+        
+        // Particles (The "Geometry")
+        let particles = [];
+        const NUM_PARTICLES = 200; 
+        
+        // Horse Target Geometry (Simplified Constellation)
+        const horseTemplate = [
+            {x:0.8, y:-0.6}, {x:0.9, y:-0.4}, // Head
+            {x:0.6, y:-0.3}, {x:0.5, y:0.0},  // Neck
+            {x:0.2, y:0.1}, {x:-0.2, y:0.1}, {x:-0.5, y:0.0}, // Spine
+            {x:-0.7, y:0.2}, {x:-0.6, y:0.5}, // Rump
+            {x:0.4, y:0.3}, {x:0.4, y:0.6}, {x:0.45, y:0.9}, // Front Leg R
+            {x:0.3, y:0.3}, {x:0.2, y:0.6}, {x:0.15, y:0.9}, // Front Leg L
+            {x:-0.5, y:0.4}, {x:-0.6, y:0.7}, {x:-0.7, y:1.0}, // Back Leg R
+            {x:-0.4, y:0.4}, {x:-0.3, y:0.7}, {x:-0.2, y:1.0}, // Back Leg L
+            {x:-0.8, y:0.3}, {x:-0.9, y:0.5} // Tail
+        ];
+
+        // Scenery Data
+        let mountains = [];
+        let stars = [];
+        let debris = []; // Foreground fast moving objects
+        let sun = { x: 0, y: 0, r: 0, color: '#ffaa00' };
+
+        /**
+         * INITIALIZATION
+         */
+        function init() {
+            resize();
+            window.addEventListener('resize', resize);
+            
+            // Touch/Pointer listeners with Passive: false to allow preventDefault
+            canvas.addEventListener('pointerdown', startDrawing, {passive: false});
+            canvas.addEventListener('pointermove', draw, {passive: false});
+            canvas.addEventListener('pointerup', stopDrawing);
+            canvas.addEventListener('pointerout', stopDrawing);
+            canvas.addEventListener('pointercancel', stopDrawing);
+            
+            // Buttons
+            document.getElementById('resetBtn').addEventListener('click', resetCanvas);
+            document.getElementById('transformBtn').addEventListener('click', startTransformation);
+            document.getElementById('saveBtn').addEventListener('click', downloadPoster);
+            
+            generateBackground();
+            loop();
+        }
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            generateBackground();
+        }
+
+        function setColor(color, btn) {
+            brushColor = color;
+            // Update UI
+            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+            if(btn) btn.classList.add('active');
+        }
+
+        function generateBackground() {
+            // 1. Mountains
+            mountains = [];
+            for (let i = 0; i < 3; i++) {
+                let points = [];
+                let yBase = height - (i * (height * 0.15)); // Dynamic height based on screen
+                
+                // Ensure mountains fill the bottom
+                points.push({x: 0, y: height + 200}); 
+                points.push({x: 0, y: yBase}); 
+                
+                let x = 0;
+                while(x < width + 400) { // Generate extra width for scrolling
+                    x += 50 + Math.random() * 150;
+                    let y = yBase - (Math.random() * (height * 0.2));
+                    points.push({x: x, y: y});
+                }
+                points.push({x: x, y: height + 200});
+                
+                mountains.push({
+                    // Gradient colors: Darker as it gets closer to front (silhouette) or reverse?
+                    // Let's do atmospheric perspective: Far = lighter/foggy, Near = Darker
+                    color: i === 0 ? '#121214' : (i === 1 ? '#1a1a1e' : '#25252a'),
+                    points: points,
+                    speed: (3 - i) * 0.5,
+                    offset: 0
+                });
+            }
+            
+            // 2. Stars
+            stars = [];
+            for(let i=0; i<80; i++) {
+                stars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height * 0.7,
+                    size: Math.random() * 1.5,
+                    opacity: Math.random()
+                });
+            }
+
+            // 3. Sun/Moon Geometry
+            sun = {
+                x: width * 0.8,
+                y: height * 0.2,
+                r: Math.min(width, height) * 0.15,
+                color: '#fbbf24'
+            };
+
+            // 4. Foreground Debris (initialized empty, generated on fly)
+            debris = [];
+        }
+
+        /**
+         * DRAWING LOGIC
+         */
+        function startDrawing(e) {
+            if (currentState !== 'drawing') return;
+            e.preventDefault(); // Stop mobile scrolling
+            isDrawing = true;
+            currentStroke = [];
+            document.getElementById('instruction-text').style.opacity = '0';
+            
+            // Handle input coordinates
+            const {x, y} = getPointerPos(e);
+            addPoint(x, y);
+        }
+
+        function draw(e) {
+            if (!isDrawing || currentState !== 'drawing') return;
+            e.preventDefault(); // Stop mobile scrolling
+            const {x, y} = getPointerPos(e);
+            addPoint(x, y);
+        }
+
+        function getPointerPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+
+        function addPoint(x, y) {
+            const point = {x, y, color: brushColor};
+            currentStroke.push(point);
+            strokes.push(point);
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function resetCanvas() {
+            strokes = [];
+            particles = [];
+            currentState = 'drawing';
+            document.getElementById('instruction-text').style.opacity = '1';
+            document.getElementById('color-controls').style.display = 'flex';
+            document.getElementById('transformBtn').style.display = 'block';
+            document.getElementById('saveBtn').classList.add('hidden');
+            document.getElementById('resetBtn').innerText = "重置";
+            ctx.clearRect(0, 0, width, height);
+        }
+
+        /**
+         * TRANSFORMATION LOGIC
+         */
+        function startTransformation() {
+            if (strokes.length < 5) {
+                alert("请先绘制几笔，赋予它色彩与灵魂。");
+                return;
+            }
+
+            currentState = 'morphing';
+            
+            // UI Transitions
+            document.getElementById('color-controls').style.display = 'none';
+            document.getElementById('transformBtn').style.display = 'none';
+            document.getElementById('saveBtn').classList.remove('hidden');
+            document.getElementById('resetBtn').innerText = "重绘";
+            
+            particles = [];
+            
+            // Center calculation
+            let minX = width, maxX = 0, minY = height, maxY = 0;
+            strokes.forEach(p => {
+                if(p.x < minX) minX = p.x;
+                if(p.x > maxX) maxX = p.x;
+                if(p.y < minY) minY = p.y;
+                if(p.y > maxY) maxY = p.y;
+            });
+
+            // Generate particles
+            for (let i = 0; i < NUM_PARTICLES; i++) {
+                const randomPoint = strokes[Math.floor(Math.random() * strokes.length)];
+                const templateNode = horseTemplate[i % horseTemplate.length];
+                
+                // More organic distribution noise
+                const targetNoiseX = (Math.random() - 0.5) * 0.3;
+                const targetNoiseY = (Math.random() - 0.5) * 0.3;
+
+                particles.push({
+                    x: randomPoint.x,
+                    y: randomPoint.y,
+                    color: randomPoint.color,
+                    baseX: randomPoint.x,
+                    baseY: randomPoint.y,
+                    targetRelX: templateNode.x + targetNoiseX,
+                    targetRelY: templateNode.y + targetNoiseY,
+                    speed: 0.03 + Math.random() * 0.04, // Variegated morph speed
+                    size: 1 + Math.random() * 2.5,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+
+            setTimeout(() => {
+                currentState = 'running';
+            }, 1800);
+        }
+
+        /**
+         * MAIN LOOP
+         */
+        function loop() {
+            requestAnimationFrame(loop);
+
+            // Background Handling
+            if (currentState === 'running') {
+                // Trail effect for speed
+                ctx.fillStyle = 'rgba(10, 10, 12, 0.25)'; 
+            } else {
+                ctx.fillStyle = 'rgba(10, 10, 12, 1)';
+            }
+            ctx.fillRect(0, 0, width, height);
+
+            const time = Date.now() * 0.001;
+
+            drawScenery(time);
+
+            if (currentState === 'drawing') {
+                renderUserDrawing();
+            } else {
+                updateAndRenderHorse(time);
+            }
+            
+            // Overlay subtle texture (Scanlines)
+            if(currentState === 'running') {
+                ctx.fillStyle = 'rgba(255,255,255,0.02)';
+                for(let i=0; i<height; i+=4) {
+                    ctx.fillRect(0, i, width, 1);
+                }
+            }
+        }
+
+        function drawScenery(time) {
+            // 1. Sun/Moon
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = sun.color;
+            ctx.fillStyle = sun.color;
+            ctx.beginPath();
+            ctx.arc(sun.x, sun.y, sun.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // 2. Stars
+            ctx.fillStyle = '#ffffff';
+            stars.forEach(star => {
+                ctx.globalAlpha = star.opacity * (0.5 + 0.5 * Math.sin(time * 2 + star.x));
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+
+            // 3. Mountains (Parallax)
+            if (currentState === 'running') {
+                mountains.forEach((mtn, idx) => {
+                    mtn.offset -= mtn.speed * 3;
+                    
+                    // Reset offset to loop seamlessly
+                    // Simple technique: Draw the shape twice
+                    
+                    ctx.save();
+                    ctx.translate(mtn.offset % 800, 0); 
+                    // Note: True endless terrain requires recycling points, 
+                    // here we use a wide pattern and translate it.
+                    // To prevent gaps, we draw it multiple times horizontally
+                    
+                    drawMountainLayer(mtn, 0);
+                    drawMountainLayer(mtn, 800); // Assuming pattern width roughly
+                    drawMountainLayer(mtn, 1600); 
+                    drawMountainLayer(mtn, 2400);
+                    
+                    ctx.restore();
+                });
+            } else {
+                 mountains.forEach(mtn => {
+                    drawMountainLayer(mtn, 0);
+                 });
+            }
+
+            // 4. Ground Grid (Perspective Lines)
+            if (currentState === 'running') {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                const groundY = height * 0.8;
+                
+                // Horizontal moving lines
+                const gridOffset = (time * 200) % 50;
+                for(let i = groundY; i < height; i+=30) {
+                    // Perspective density
+                }
+                
+                // Vertical perspective lines
+                const centerX = width/2;
+                for(let i = -width; i < width * 2; i+=100) {
+                    let x = i - (time * 400) % 100; 
+                    // Draw floor line
+                    ctx.moveTo(x, groundY);
+                    // Slant them for perspective? Keeping it 2D parallax for this style
+                    // Let's just do simple horizontal streak lines for speed
+                    ctx.moveTo(x, groundY + (Math.random()*10));
+                    ctx.lineTo(x - 100, height);
+                }
+                ctx.stroke();
+                
+                // 5. Foreground Debris
+                updateDebris();
+            }
+        }
+        
+        function drawMountainLayer(mtn, xOffset) {
+            ctx.fillStyle = mtn.color;
+            ctx.beginPath();
+            
+            // Draw points relative to offset
+            if (mtn.points.length > 0) {
+                ctx.moveTo(mtn.points[0].x + xOffset, mtn.points[0].y);
+                for (let i = 1; i < mtn.points.length; i++) {
+                    ctx.lineTo(mtn.points[i].x + xOffset, mtn.points[i].y);
+                }
+            }
+            ctx.fill();
+        }
+
+        function updateDebris() {
+            // Spawn new debris
+            if (Math.random() < 0.05) {
+                debris.push({
+                    x: width + 50,
+                    y: height - (Math.random() * height * 0.3),
+                    w: 20 + Math.random() * 60,
+                    h: 20 + Math.random() * 60,
+                    speed: 10 + Math.random() * 5,
+                    opacity: 0.1 + Math.random() * 0.2
+                });
+            }
+
+            ctx.fillStyle = '#000'; // Silhouette
+            for (let i = debris.length - 1; i >= 0; i--) {
+                let d = debris[i];
+                d.x -= d.speed;
+                
+                ctx.fillStyle = `rgba(20, 20, 25, ${d.opacity})`;
+                ctx.beginPath();
+                ctx.moveTo(d.x, d.y);
+                ctx.lineTo(d.x - d.w, d.y + d.h);
+                ctx.lineTo(d.x + d.w, d.y + d.h);
+                ctx.fill();
+
+                if (d.x < -100) debris.splice(i, 1);
+            }
+        }
+
+        function renderUserDrawing() {
+            if(strokes.length < 1) return;
+
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.shadowBlur = 15;
+            
+            for (let i = 1; i < strokes.length; i++) {
+                const p1 = strokes[i-1];
+                const p2 = strokes[i];
+                
+                if (Math.abs(p1.x - p2.x) > 50 || Math.abs(p1.y - p2.y) > 50) continue;
+
+                ctx.beginPath();
+                ctx.strokeStyle = p1.color;
+                ctx.shadowColor = p1.color;
+                ctx.lineWidth = 3;
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+        }
+
+        function updateAndRenderHorse(time) {
+            const centerX = width / 2;
+            const centerY = height / 2 + height * 0.1; // Lower slightly
+            const scale = Math.min(width, height) * 0.3;
+
+            ctx.lineWidth = 0.5;
+            ctx.globalCompositeOperation = 'screen'; 
+
+            particles.forEach(p => {
+                let targetX, targetY;
+
+                if (currentState === 'morphing') {
+                    targetX = centerX + p.targetRelX * scale;
+                    targetY = centerY + p.targetRelY * scale;
+                    p.x += (targetX - p.x) * p.speed;
+                    p.y += (targetY - p.y) * p.speed;
+                } else if (currentState === 'running') {
+                    const runCycle = time * 8; 
+                    const bodyBounce = Math.sin(runCycle * 2) * (scale * 0.05);
+                    
+                    const isLeg = p.targetRelY > 0.2; 
+                    let animOffsetX = 0;
+                    let animOffsetY = bodyBounce;
+
+                    if (isLeg) {
+                        animOffsetX = Math.sin(runCycle + p.phase) * (scale * 0.15);
+                        animOffsetY = Math.cos(runCycle + p.phase) * (scale * 0.1);
+                    }
+
+                    targetX = centerX + p.targetRelX * scale + animOffsetX;
+                    targetY = centerY + p.targetRelY * scale + animOffsetY;
+
+                    p.x += (targetX - p.x) * 0.1;
+                    p.y += (targetY - p.y) * 0.1;
+                }
+
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Geometric Connections
+            ctx.beginPath();
+            // Optimization: Don't check all pairs. 
+            // Since particles is small (200), nested loop is ~40k ops, fine for modern JS.
+            // But let's limit drawing distance based on scale.
+            const maxDist = (scale * 0.15) ** 2; 
+
+            for (let i = 0; i < particles.length; i++) {
+                const p1 = particles[i];
+                let connections = 0;
+                for (let j = i + 1; j < particles.length; j++) {
+                    const p2 = particles[j];
+                    const dx = p1.x - p2.x;
+                    const dy = p1.y - p2.y;
+                    const distSq = dx*dx + dy*dy;
+
+                    if (distSq < maxDist) { 
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        connections++;
+                        if (connections > 3) break; 
+                    }
+                }
+            }
+            ctx.strokeStyle = 'rgba(255, 215, 0, 0.2)'; 
+            ctx.stroke();
+
+            // Glow behind horse
+            if (currentState === 'running') {
+                const grad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, scale * 1.5);
+                grad.addColorStop(0, 'rgba(255,200,100,0.08)');
+                grad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = grad;
+                ctx.globalCompositeOperation = 'source-over'; // Reset for glow fill
+                ctx.fillRect(0,0,width,height);
+            }
+
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        function downloadPoster() {
+            const centerX = width / 2;
+            ctx.save();
+            
+            // Add Title
+            ctx.font = "bold 40px 'Cinzel', serif";
+            ctx.fillStyle = "#e5e5e5";
+            ctx.textAlign = "center";
+            ctx.shadowColor = "rgba(0,0,0,0.8)";
+            ctx.shadowBlur = 10;
+            ctx.fillText("EQUINE · 2026", centerX, height - 100);
+            
+            ctx.font = "16px 'Noto Serif SC', serif";
+            ctx.fillStyle = "#fbbf24";
+            ctx.fillText("灵 韵 · 几 何 · 新 生", centerX, height - 70);
+
+            ctx.font = "12px monospace";
+            ctx.fillStyle = "#666";
+            ctx.fillText(new Date().toLocaleDateString() + " GENERATED ART", centerX, height - 40);
+
+            ctx.restore();
+
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'My_Geometric_Horse.png';
+            link.href = dataURL;
+            link.click();
+        }
+
+        init();
+    </script>
+</body>
+</html>
